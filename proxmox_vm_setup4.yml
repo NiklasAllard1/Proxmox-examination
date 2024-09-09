@@ -1,0 +1,144 @@
+---
+- hosts: localhost
+  vars_files:
+    - proxmox_credentials.yml
+    - proxmox_passwords.yml
+  gather_facts: false
+  tasks:
+    - name: Authenticate with Proxmox API
+      uri:
+        url: "https://81.230.229.37:8006/api2/json/access/ticket"
+        method: POST
+        body: "username=root@pam&password={{ root_password }}"
+        body_format: form-urlencoded
+        return_content: true
+        validate_certs: false
+      register: auth_response
+
+    - name: Set Proxmox API auth headers
+      set_fact:
+        proxmox_csrf_token: "{{ auth_response.json.data.CSRFPreventionToken }}"
+        proxmox_auth_cookie: "{{ auth_response.json.data.ticket }}"
+
+    - name: Create the web server container with public and private network
+      uri:
+        url: "https://81.230.229.37:8006/api2/json/nodes/s1/lxc"
+        method: POST
+        headers:
+          Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
+          CSRFPreventionToken: "{{ proxmox_csrf_token }}"
+        body:
+          vmid: 300
+          ostemplate: "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst"
+          storage: "local-lvm"
+          hostname: "web-server"
+          memory: 4096
+          cores: 2
+          net0: "name=eth0,bridge=vmbr0,ip=192.168.68.135/24,gw=192.168.68.1"
+          net1: "name=eth1,bridge=vmbr0,ip=192.168.2.10/24"
+          password: "{{ root_password }}"
+        body_format: json
+        validate_certs: false
+
+    - name: Pause for 30 seconds to allow the web server to start up
+      pause:
+        seconds: 30
+
+    - name: Ensure the web server container is started
+      uri:
+        url: "https://81.230.229.37:8006/api2/json/nodes/s1/lxc/300/status/start"
+        method: POST
+        headers:
+          Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
+          CSRFPreventionToken: "{{ proxmox_csrf_token }}"
+        validate_certs: false
+
+    - name: Create the database server container with only private network
+      uri:
+        url: "https://81.230.229.37:8006/api2/json/nodes/s1/lxc"
+        method: POST
+        headers:
+          Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
+          CSRFPreventionToken: "{{ proxmox_csrf_token }}"
+        body:
+          vmid: 301
+          ostemplate: "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst"
+          storage: "local-lvm"
+          hostname: "database-server"
+          memory: 8192
+          cores: 4
+          net0: "name=eth0,bridge=vmbr0,ip=192.168.2.11/24"
+          password: "{{ root_password }}"
+        body_format: json
+        validate_certs: false
+
+    - name: Pause for 30 seconds to allow the database server to start up
+      pause:
+        seconds: 30
+
+    - name: Ensure the database server container is started
+      uri:
+        url: "https://81.230.229.37:8006/api2/json/nodes/s1/lxc/301/status/start"
+        method: POST
+        headers:
+          Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
+          CSRFPreventionToken: "{{ proxmox_csrf_token }}"
+        validate_certs: false
+
+    - name: Create the load balancer container with public and private network
+      uri:
+        url: "https://81.230.229.37:8006/api2/json/nodes/s1/lxc"
+        method: POST
+        headers:
+          Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
+          CSRFPreventionToken: "{{ proxmox_csrf_token }}"
+        body:
+          vmid: 302
+          ostemplate: "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst"
+          storage: "local-lvm"
+          hostname: "load-balancer"
+          memory: 2048
+          cores: 2
+          net0: "name=eth0,bridge=vmbr0,ip=192.168.68.136/24,gw=192.168.68.1"
+          net1: "name=eth1,bridge=vmbr0,ip=192.168.2.12/24"
+          password: "{{ root_password }}"
+        body_format: json
+        validate_certs: false
+
+    - name: Pause for 30 seconds to allow the load balancer to start up
+      pause:
+        seconds: 30
+
+    - name: Ensure the load balancer container is started
+      uri:
+        url: "https://81.230.229.37:8006/api2/json/nodes/s1/lxc/302/status/start"
+        method: POST
+        headers:
+          Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
+          CSRFPreventionToken: "{{ proxmox_csrf_token }}"
+        validate_certs: false
+        *//
+
+    - name: Add web-server to inventory
+      add_host:
+        name: web-server
+        ansible_host: 192.168.68.135
+        ansible_port: 8022
+        ansible_user: root
+        ansible_password: "{{ root_password }}"
+
+    - name: Add database-server to inventory
+      add_host:
+        name: database-server
+        ansible_host: 192.168.2.11
+        ansible_user: root
+        ansible_password: "{{ root_password }}"
+
+    - name: Add load-balancer to inventory
+      add_host:
+        name: load-balancer
+        ansible_host: 192.168.1.12
+        ansible_user: root
+        ansible_password: "{{ root_password }}"
+
+- import_playbook: service_setup1.yml

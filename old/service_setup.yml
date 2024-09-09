@@ -1,0 +1,90 @@
+---
+- hosts: localhost
+  vars_files:
+    - proxmox_credentials.yml
+    - proxmox_passwords.yml
+  gather_facts: no
+  tasks:
+    - name: Authenticate with Proxmox API
+      uri:
+        url: "https://81.230.229.37:8006/api2/json/access/ticket"
+        method: POST
+        body: "username=root@pam&password={{ root_password }}"
+        body_format: form-urlencoded
+        return_content: yes
+        validate_certs: no
+      register: auth_response
+
+    - name: Set Proxmox API auth headers
+      set_fact:
+        proxmox_csrf_token: "{{ auth_response.json.data.CSRFPreventionToken }}"
+        proxmox_auth_cookie: "{{ auth_response.json.data.ticket }}"
+
+    - name: Add web-server to inventory
+      add_host:
+        name: web-server
+        ansible_host: 192.168.1.10
+        ansible_user: root
+        ansible_password: "{{ root_password }}"
+
+    - name: Add database-server to inventory
+      add_host:
+        name: database-server
+        ansible_host: 192.168.2.11
+        ansible_user: root
+        ansible_password: "{{ root_password }}"
+
+    - name: Add load-balancer to inventory
+      add_host:
+        name: load-balancer
+        ansible_host: 192.168.1.12
+        ansible_user: root
+        ansible_password: "{{ root_password }}"
+
+# Install Apache on web-server
+- hosts: web-server
+  become: yes
+  tasks:
+    - name: Install Apache
+      apt:
+        name: apache2
+        state: present
+        update_cache: yes
+
+    - name: Ensure Apache is started
+      systemd:
+        name: apache2
+        state: started
+        enabled: yes
+
+# Install MySQL on database-server
+- hosts: database-server
+  become: yes
+  tasks:
+    - name: Install MySQL
+      apt:
+        name: mysql-server
+        state: present
+        update_cache: yes
+
+    - name: Ensure MySQL is started
+      systemd:
+        name: mysql
+        state: started
+        enabled: yes
+
+# Install HAProxy on load-balancer
+- hosts: load-balancer
+  become: yes
+  tasks:
+    - name: Install HAProxy (for load balancing)
+      apt:
+        name: haproxy
+        state: present
+        update_cache: yes
+
+    - name: Ensure HAProxy is started
+      systemd:
+        name: haproxy
+        state: started
+        enabled: yes

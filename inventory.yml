@@ -1,0 +1,21 @@
+all:
+  hosts:
+    web-server:
+      ansible_host: 192.168.68.135
+      ansible_user: root
+    database-server:
+      ansible_host: 192.168.2.11
+      ansible_user: root
+    load-balancer:
+      ansible_host: 192.168.1.12
+      ansible_user: root
+  children:
+    webservers:
+      hosts:
+        web-server:
+    databases:
+      hosts:
+        database-server:
+    loadbalancers:
+      hosts:
+        load-balancer:

@@ -1,0 +1,136 @@
+---
+- hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Create the web server VM with public and private network
+      community.general.proxmox_kvm:
+        api_host: "your_proxmox_host"
+        api_user: "root@pam"
+        api_password: "your_password"
+        node: "proxmox_node"
+        vmid: 100
+        name: "web-server"
+        memory: 4096
+        cores: 2
+        storage: "local-lvm"
+        disk_size: "20G"
+        net0: "virtio,bridge=vmbr0"  # Public internet access
+        net1: "virtio,bridge=vmbr1"  # Private network with database
+        ostype: "l26"
+        iso: "local:iso/ubuntu.iso"
+        state: present
+
+    - name: Create the database server VM with only private network
+      community.general.proxmox_kvm:
+        api_host: "your_proxmox_host"
+        api_user: "root@pam"
+        api_password: "your_password"
+        node: "proxmox_node"
+        vmid: 101
+        name: "database-server"
+        memory: 8192
+        cores: 4
+        storage: "local-lvm"
+        disk_size: "50G"
+        net0: "virtio,bridge=vmbr1"  # Only private network
+        ostype: "l26"
+        iso: "local:iso/ubuntu.iso"
+        state: present
+
+    - name: Create the load balancer VM with public and private network
+      community.general.proxmox_kvm:
+        api_host: "your_proxmox_host"
+        api_user: "root@pam"
+        api_password: "your_password"
+        node: "proxmox_node"
+        vmid: 102
+        name: "load-balancer"
+        memory: 2048
+        cores: 2
+        storage: "local-lvm"
+        disk_size: "10G"
+        net0: "virtio,bridge=vmbr0"  # Public internet access
+        net1: "virtio,bridge=vmbr1"  # Private network with web server
+        ostype: "l26"
+        iso: "local:iso/ubuntu.iso"
+        state: present
+
+- hosts: web-server
+  become: yes
+  tasks:
+    - name: Install nftables
+      apt:
+        name: nftables
+        state: present
+        update_cache: yes
+
+    - name: Set up nftables rules on the web server
+      ansible.builtin.shell: |
+        nft add table inet filter
+        nft add chain inet filter input { type filter hook input priority 0 \; }
+        nft add rule inet filter input ct state established,related accept
+        nft add rule inet filter input iifname "lo" accept
+        nft add rule inet filter input tcp dport {80, 443} accept  # HTTP/HTTPS
+        nft add rule inet filter input ip saddr 192.168.0.0/24 accept  # Private network
+        nft add rule inet filter input drop
+
+    - name: Install Apache
+      apt:
+        name: apache2
+        state: present
+        update_cache: yes
+
+    - name: Ensure Apache is started
+      systemd:
+        name: apache2
+        state: started
+        enabled: yes
+
+- hosts: database-server
+  become: yes
+  tasks:
+    - name: Install nftables
+      apt:
+        name: nftables
+        state: present
+        update_cache: yes
+
+    - name: Set up nftables rules on the database server
+      ansible.builtin.shell: |
+        nft add table inet filter
+        nft add chain inet filter input { type filter hook input priority 0 \; }
+        nft add rule inet filter input ct state established,related accept
+        nft add rule inet filter input iifname "lo" accept
+        nft add rule inet filter input ip saddr 192.168.0.0/24 accept  # Allow traffic from web server
+        nft add rule inet filter input drop
+
+    - name: Install MySQL
+      apt:
+        name: mysql-server
+        state: present
+        update_cache: yes
+
+    - name: Ensure MySQL is started
+      systemd:
+        name: mysql
+        state: started
+        enabled: yes
+
+- hosts: load-balancer
+  become: yes
+  tasks:
+    - name: Install nftables
+      apt:
+        name: nftables
+        state: present
+        update_cache: yes
+
+    - name: Set up nftables rules on the load balancer
+      ansible.builtin.shell: |
+        nft add table inet filter
+        nft add chain inet filter input { type filter hook input priority 0 \; }
+        nft add rule inet filter input ct state established,related accept
+        nft add rule inet filter input iifname "lo" accept
+        nft add rule inet filter input tcp dport {80, 443} accept  # Allow HTTP/HTTPS from internet
+        nft add rule inet filter input ip saddr 192.168.0.0/24 accept  # Private network access to web server
+        nft add rule inet filter input drop

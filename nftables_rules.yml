@@ -1,0 +1,56 @@
+---
+- hosts: web-server
+  become: yes
+  tasks:
+    - name: Install nftables
+      apt:
+        name: nftables
+        state: present
+        update_cache: yes
+
+    - name: Set up nftables rules on the web server
+      ansible.builtin.shell: |
+        nft add table inet filter
+        nft add chain inet filter input { type filter hook input priority 0 \; }
+        nft add rule inet filter input ct state established,related accept
+        nft add rule inet filter input iifname "lo" accept
+        nft add rule inet filter input tcp dport {80, 443} accept  # HTTP/HTTPS
+        nft add rule inet filter input ip saddr 192.168.0.0/24 accept  # Private network
+        nft add rule inet filter input drop
+
+- hosts: database-server
+  become: yes
+  tasks:
+    - name: Install nftables
+      apt:
+        name: nftables
+        state: present
+        update_cache: yes
+
+    - name: Set up nftables rules on the database server
+      ansible.builtin.shell: |
+        nft add table inet filter
+        nft add chain inet filter input { type filter hook input priority 0 \; }
+        nft add rule inet filter input ct state established,related accept
+        nft add rule inet filter input iifname "lo" accept
+        nft add rule inet filter input ip saddr 192.168.0.0/24 accept  # Allow traffic from web server
+        nft add rule inet filter input drop
+
+- hosts: load-balancer
+  become: yes
+  tasks:
+    - name: Install nftables
+      apt:
+        name: nftables
+        state: present
+        update_cache: yes
+
+    - name: Set up nftables rules on the load balancer
+      ansible.builtin.shell: |
+        nft add table inet filter
+        nft add chain inet filter input { type filter hook input priority 0 \; }
+        nft add rule inet filter input ct state established,related accept
+        nft add rule inet filter input iifname "lo" accept
+        nft add rule inet filter input tcp dport {80, 443} accept  # Allow HTTP/HTTPS from internet
+        nft add rule inet filter input ip saddr 192.168.0.0/24 accept  # Private network access to web server
+        nft add rule inet filter input drop

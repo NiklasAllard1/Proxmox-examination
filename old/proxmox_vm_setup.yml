@@ -1,0 +1,59 @@
+---
+- hosts: localhost
+  vars_files:
+    - proxmox_credentials.yml
+    - proxmox_passwords.yml
+  gather_facts: no
+  tasks:
+    - name: Create the web server container with public and private network
+      community.general.proxmox_kvm:
+        api_host: "81.230.229.37:8006"
+        api_user: "root@pam"
+        api_password: "{{ root_password }}"
+        node: "proxmox_node"
+        vmid: 300
+        hostname: "web-server"
+        memory: 4096
+        cpus: 2
+        storage: "local-lvm"
+        rootfs: "local-lvm:20G"
+        ostemplate: "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst"  # Rätt template på local
+        net0: name=eth0,bridge=vmbr0,ip=dhcp  # Public internet access
+        net1: name=eth1,bridge=vmbr1,ip=dhcp  # Private network
+        password: "{{ root_password }}"  # Använder det krypterade lösenordet
+        state: present
+
+    - name: Create the database server container with only private network
+      community.general.proxmox_kvm:
+        api_host: "81.230.229.37:8006"
+        api_user: "root@pam"
+        api_password: "{{ proxmox_password }}"
+        node: "proxmox_node"
+        vmid: 301
+        hostname: "database-server"
+        memory: 8192
+        cpus: 4
+        storage: "local-lvm"
+        rootfs: "local-lvm:50G"
+        ostemplate: "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst"  # Rätt template på local
+        net0: name=eth0,bridge=vmbr1,ip=dhcp  # Private network only
+        password: "{{ root_password }}"  # Använder det krypterade lösenordet
+        state: present
+
+    - name: Create the load balancer container with public and private network
+      community.general.proxmox_kvm:
+        api_host: "81.230.229.37:8006"
+        api_user: "root@pam"
+        api_password: "{{ proxmox_password }}"
+        node: "proxmox_node"
+        vmid: 302
+        hostname: "load-balancer"
+        memory: 2048
+        cpus: 2
+        storage: "local-lvm"
+        rootfs: "local-lvm:10G"
+        ostemplate: "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst"  # Rätt template på local
+        net0: name=eth0,bridge=vmbr0,ip=dhcp  # Public internet access
+        net1: name=eth1,bridge=vmbr1,ip=dhcp  # Private network
+        password: "{{ root_password }}"  # Använder det krypterade lösenordet
+        state: present
