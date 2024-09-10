@@ -1,7 +1,7 @@
 all:
   hosts:
     web-server:
-      ansible_host: 192.168.68.135
+      ansible_host: 192.168.68.150
       ansible_user: root
     database-server:
       ansible_host: 192.168.2.11

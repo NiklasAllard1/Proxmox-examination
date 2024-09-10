@@ -14,8 +14,7 @@
         nft add chain inet filter input { type filter hook input priority 0 \; }
         nft add rule inet filter input ct state established,related accept
         nft add rule inet filter input iifname "lo" accept
-        nft add rule inet filter input tcp dport {80, 443} accept  # HTTP/HTTPS
-        nft add rule inet filter input ip saddr 192.168.0.0/24 accept  # Private network
+        nft add rule inet filter input ip saddr 192.168.0.0/24 accept  # Allow traffic 
         nft add rule inet filter input drop
 
 - hosts: database-server

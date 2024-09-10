@@ -34,15 +34,15 @@
           hostname: "web-server"
           memory: 4096
           cores: 2
-          net0: "name=eth0,bridge=vmbr0,ip=192.168.68.135/24,gw=192.168.68.1"
+          net0: "name=eth0,bridge=vmbr0,ip=192.168.68.150/24,gw=192.168.68.1"
           net1: "name=eth1,bridge=vmbr0,ip=192.168.2.10/24"
           password: "{{ root_password }}"
         body_format: json
         validate_certs: false
 
-    - name: Pause for 30 seconds to allow the web server to start up
+    - name: Pause for 10 seconds to allow the web server to start up
       pause:
-        seconds: 30
+        seconds: 10
 
     - name: Ensure the web server container is started
       uri:
@@ -72,9 +72,9 @@
         body_format: json
         validate_certs: false
 
-    - name: Pause for 30 seconds to allow the database server to start up
+    - name: Pause for 10 seconds to allow the database server to start up
       pause:
-        seconds: 30
+        seconds: 10
 
     - name: Ensure the database server container is started
       uri:
@@ -105,9 +105,9 @@
         body_format: json
         validate_certs: false
 
-    - name: Pause for 30 seconds to allow the load balancer to start up
+    - name: Pause for 10 seconds to allow the load balancer to start up
       pause:
-        seconds: 30
+        seconds: 10
 
     - name: Ensure the load balancer container is started
       uri:
@@ -117,13 +117,13 @@
           Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
           CSRFPreventionToken: "{{ proxmox_csrf_token }}"
         validate_certs: false
-        *//
+        
 
     - name: Add web-server to inventory
       add_host:
         name: web-server
-        ansible_host: 192.168.68.135
-        ansible_port: 8022
+        ansible_host: 192.168.68.150
+        ansible_port: 22
         ansible_user: root
         ansible_password: "{{ root_password }}"
 
